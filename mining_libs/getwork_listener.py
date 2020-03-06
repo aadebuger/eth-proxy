@@ -29,14 +29,15 @@ class Root(Resource):
     def render_POST(self, request):
         request.setHeader('content-type', 'application/json')
         data = json.loads(request.content.read())
-
+        print("render_post")
+        print("content=",data)
         if not self.job_registry.jobs:
             log.warning('Proxy is waiting for a job...')
             request.write(self.json_error(data.get('id', 0), "Proxy is waiting for a job...")+'\n')
             request.finish()
             return NOT_DONE_YET
-
-        if not data.has_key('method'):
+        print("'method' in  data",'method' in  data)
+        if not 'method' in  data:
             response = self.json_error(data.get('id'), "Need methods")+'\n'
         elif data['method'] == 'eth_getWork':
             if self.getWorkCacheTimeout["work"]==self.job_registry.jobs.params[0] and int(time.time())-self.getWorkCacheTimeout["time"]>=self.job_registry.coinTimeout:
@@ -48,7 +49,7 @@ class Root(Resource):
                 response = self.json_response(data.get('id', 0), self.job_registry.jobs.params)
         elif data['method'] == 'eth_submitWork' or data['method'] == 'eth_submitHashrate':
             if self.isWorkerID:
-                worker_name = request.uri[1:15].split("/")[0]
+                worker_name = request.uri[1:15].decode().split("/")[0]
                 if not worker_name:
                     ip_temp = request.getClientIP().split('.')
                     worker_name = str( int(ip_temp[0])*16777216 + int(ip_temp[1])*65536 + int(ip_temp[2])*256 + int(ip_temp[3]) )
@@ -56,7 +57,7 @@ class Root(Resource):
                 worker_name = ''
 
             if data['method'] == 'eth_submitHashrate':
-                if worker_name and (not self.submitHashrates.has_key(worker_name) or int(time.time())-self.submitHashrates[worker_name]>=60):
+                if worker_name and (not worker_name in self.submitHashrates or int(time.time())-self.submitHashrates[worker_name]>=60):
                     self.submitHashrates[worker_name] = int(time.time())
                     log.info('Hashrate for %s is %s MHs' % (worker_name,int(data['params'][0],16)/1000000.0 ) )
                     threads.deferToThread(self.job_registry.submit, data['method'], data['params'], worker_name)
@@ -67,7 +68,8 @@ class Root(Resource):
             response = self.json_error(data.get('id'), "Unsupported method '%s'" % data['method'])
 
         try:
-            request.write(response+'\n')
+            print("response =",response)
+            request.write((response+'\n').encode("utf-8"))
             request.finish()
             return NOT_DONE_YET
         except Exception:
