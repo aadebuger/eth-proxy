@@ -22,6 +22,7 @@ class JobRegistry(object):
         self.f2 = f2
         self.f3 = f3
         self.jobs = None
+        self.jobdict={}
         # stop mining after 6 minutes if internet disconnected
         if settings.COIN=="ETH":
             self.coinTimeout = 360
@@ -32,6 +33,9 @@ class JobRegistry(object):
 
     def replace_job(self, newjob, connection_ref):
         is_main_pool = True
+        print("newjob=",newjob.params)
+        print("jobid=",newjob.params[0])
+        self.jobdict[newjob.params[0]]=0
         if self.f and hasattr(self.f, "remote_ip"):
             is_main_pool = connection_ref._get_ip() == self.f.remote_ip
 
@@ -58,7 +62,7 @@ class JobRegistry(object):
             log_text = "NEW_JOB MAIN_POOL"
         else:
             log_text = "NEW_JOB FAILOVER_POOL%s" % pool_number
-
+        self.jobdict[newjob.params[0]]=pool_number
         if (self.f and self.f.is_connected and is_main_pool) or \
             (not self.f.is_connected and not is_main_pool and self.f1 and self.f1.is_connected and is_failover_pool1) or \
             (not self.f.is_connected and not is_main_pool and self.f2 and self.f2.is_connected and is_failover_pool2 and not self.f1.is_connected) or \
@@ -79,6 +83,39 @@ class JobRegistry(object):
 
     def submit(self, method, params, worker_name):
         log_text = ""
+        jobid=params[1]
+        print("jobid=",jobid)
+        print("channel=",self.jobdict[jobid])
+        channel = self.jobdict[jobid]
+        if settings.DEBUG:
+            log_text = "%s by %s %s" % (method, worker_name, params)
+        elif method=="eth_submitWork":
+            log_text = "eth_submitWork %s by %s" % (params[0], worker_name)
+        if self.f.is_connected and channel==0:
+            if log_text:
+                log.info( "MAIN %s" % log_text )
+            self.f.rpc(method, params, worker_name)
+        elif self.f1 and self.f1.is_connected and channel==1:
+            if log_text:
+                log.info( "FAILOVER1 %s" % log_text )
+            self.f1.rpc(method, params, worker_name)
+        elif self.f2 and self.f2.is_connected and channel == 2:
+            if log_text:
+                log.info( "FAILOVER2 %s" % log_text )
+            self.f2.rpc(method, params, worker_name)
+        elif self.f3 and self.f3.is_connected and channnel == 3:
+            if log_text:
+                log.info( "FAILOVER3 %s" % log_text )
+            self.f3.rpc(method, params, worker_name)
+        else:
+            if log_text:
+                log.info( "NO_SUBMIT_ALL_POOLS_DOWN %s" % log_text )
+
+    def submitold(self, method, params, worker_name):
+        log_text = ""
+        jobid=params[1]
+        print("jobid=",jobid)
+        print("channel=",self.jobdict[jobid])
         if settings.DEBUG:
             log_text = "%s by %s %s" % (method, worker_name, params)
         elif method=="eth_submitWork":
